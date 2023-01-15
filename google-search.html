@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Custom Icons Tutorial - Leaflet</title>
+
+    <link rel="shortcut icon" type="image/x-icon" href="docs/images/favicon.ico" />
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+        integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
+        integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+
+    <style>
+        @font-face {
+            font-family: 'Black Diamond';
+            font-style: normal;
+            font-weight: normal;
+            src: local('Black Diamond'), url('Black Diamond.otf') format('truetype');
+        }
+
+        .title {
+            font-family: 'Black Diamond', serif;
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+        }
+
+        .leaflet-container {
+            height: 100vh;
+            width: 100%;
+        }
+
+        .row {
+            display: flex;
+            width: 100%;
+        }
+
+        .left {
+            width: 300px;
+        }
+
+        .right {
+            flex: 1;
+        }
+
+        .list-container {
+            width: 300px;
+            overflow-y: auto;
+            max-height: 100vh;
+        }
+
+        .list-item {
+            border-image: linear-gradient(#f8789b, #7f4099, #02ffff, #0768af) 30;
+            border-width: 4px;
+            border-style: solid;
+            padding: 10px;
+            margin: 10px 10px;
+            /* width: 100%; */
+            box-sizing: border-box;
+            cursor: pointer;
+        }
+
+        @media screen and (max-width: 600px) {
+            .left {
+                display: none;
+            }
+        }
+
+        #autocomplete {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="row">
+        <div class="left">
+            <input id="autocomplete" placeholder="Enter your address" type="text"></input>
+            <div id="list" class="list-container"></div>
+        </div>
+        <div class="right">
+            <div id='map'></div>
+        </div>
+    </div>
+
+
+    <script>
+
+        const mainData = {
+            markers: [],
+            divs: []
+        };
+        const listDiv = document.getElementById("list")
+        const map = L.map('map').setView({ lat: 40.011025017919515, lng: -98.19962617439802 }, 3);
+
+        L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        const LeafIcon = L.Icon.extend({
+            options: {
+                iconSize: [54, 74],
+                iconAnchor: [27, 74],
+                popupAnchor: [0, -74]
+            }
+        });
+
+        const greenIcon = new LeafIcon({ iconUrl: 'small.png' });
+
+
+        d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQn-wCHbwtz-HGIi4PiVCd-KDBmWfOmsBLurd4WrrwcqfXkdOvg3oJ_Y8NVfyyZYg1DR5exobJnp9_c/pub?output=csv")
+            .then(data => {
+                console.log('data', data);
+                const listData = [];
+
+                const markers = data.map((pin, key) => {
+                    const { NAME, DATE, LOCATION, ADDRESS, lat, lon } = pin;
+
+                    const link = pin['REGISTRATION LINK']
+                    const href = link ? `<div><a href="${link}">REGISTRATION LINK</a></div>` : ""
+                    const descr = `
+                        <h2 class="title">${NAME}</h2>
+                        <div><b>Date:</b> ${DATE}</div>
+                        <div>${LOCATION}</div>
+                        <div><b>Address:</b> ${ADDRESS}</div>
+                        <div> ${ADDRESS}</div>
+                        ${href}
+                    `
+
+                    const obj = () => {
+                        const div = document.createElement('div')
+                        div.className = "list-item"
+                        const dist = document.createElement('div')
+                        div.innerHTML = `${descr}`
+                        div.appendChild(dist)
+
+                        div.addEventListener("click", () => {
+                            //map.panTo([+lat, +lon], { zoom: 10 })
+                            map.flyTo([+lat, +lon], 10);
+                        })
+
+                        const recalcDistance = ({ latitude, longitude }) => {
+                            const from = turf.point([+lon, +lat]);
+                            const to = turf.point([+longitude, +latitude]);
+                            const options = { units: 'miles' };
+                            const distance = turf.distance(from, to, options);
+                            dist.innerText = `miles: ${distance.toFixed()}`;
+                            return distance
+                        }
+
+                        return {
+                            div,
+                            recalcDistance
+                        }
+                    }
+
+                    mainData.divs.push(obj())
+
+                    const marker = L.marker([+lat, +lon], { icon: greenIcon })
+                        .bindPopup(descr)
+                        .addTo(map);
+
+                    return marker
+                });
+                mainData.markers.push(...markers)
+
+                mainData.divs.forEach(d => {
+                    listDiv.appendChild(d.div)
+                })
+
+                getLocation()
+            })
+
+
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    console.log('navigator.geolocation', position.coords);
+                    const { latitude, longitude } = position.coords
+
+                    listDiv.innerHTML = '';
+                    const distance = mainData.divs
+                        .map(d => {
+                            const distance = d.recalcDistance({ latitude, longitude })
+                            return {
+                                distance,
+                                div: d.div
+                            }
+                        })
+                        .sort((a, b) => a.distance - b.distance)
+                        .forEach(d => {
+                            listDiv.appendChild(d.div)
+                        })
+
+                }, () => {
+                    console.log('error',);
+                });
+            }
+        }
+
+        function initAutocomplete() {
+            const autocomplete = new google.maps.places.Autocomplete((document.getElementById('autocomplete')), {
+                types: ['geocode'],
+            });
+            autocomplete.addListener('place_changed', () => {
+                const place = autocomplete.getPlace();
+                console.log('place', place);
+                const coords = place.geometry.location
+                const lat = coords.lat()
+                const lng = coords.lng()
+                console.log('coords', coords);
+
+                map.flyTo([+lat, +lng], 10);
+
+            });
+        }
+
+    </script>
+
+    <script
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAoyZ_yVsI5N8KhjbWRyQeme1Pfz2DRYYc&libraries=places&callback=initAutocomplete"
+        async defer></script>
+
+</body>
+
+</html>

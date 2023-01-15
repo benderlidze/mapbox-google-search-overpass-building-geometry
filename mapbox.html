@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Add a polygon to a map using a GeoJSON source</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.12.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.12.0/mapbox-gl.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <script src="js/osmtogeojson.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        #autocomplete {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000
+        }
+
+        #info {
+            position: absolute;
+            top: 50px;
+            left: 20px;
+            z-index: 1000;
+            background-color: white;
+            padding: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="info"></div>
+    <input id="autocomplete" placeholder="45 Hugo Street, San Francisco" type="text"></input>
+
+    <div id="map"></div>
+
+    <script>
+        const infoDiv = document.getElementById("info")
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic3dlcnQiLCJhIjoiY2s3bHNtdjF2MDJ1eTNmcGowanU5MHR4ZiJ9.hzhWj9bhgD5itpWAPc3nNA';
+        const map = new mapboxgl.Map({
+            container: 'map', // container ID
+            // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
+            style: 'mapbox://styles/mapbox/light-v11', // style URL
+            center: { lng: -122.45161504440868, lat: 37.74555599214838 }, // starting position
+            zoom: 11, // starting zoom
+            projection: "mercator"
+        });
+
+        map.on('load', () => {
+            // Add a data source containing GeoJSON data.
+            map.addSource('maine', {
+                'type': 'geojson',
+                'data': turf.featureCollection([])
+            });
+
+            // Add a new layer to visualize the polygon.
+            map.addLayer({
+                'id': 'maine',
+                'type': 'fill',
+                'source': 'maine', // reference the data source
+                'layout': {},
+                'paint': {
+                    'fill-color': '#0080ff', // blue color fill
+                    'fill-opacity': 0.5
+                }
+            });
+            // Add a black outline around the polygon.
+            map.addLayer({
+                'id': 'outline',
+                'type': 'line',
+                'source': 'maine',
+                'layout': {},
+                'paint': {
+                    'line-color': '#000',
+                    'line-width': 3
+                }
+            });
+        });
+
+        function initAutocomplete() {
+            const autocomplete = new google.maps.places.Autocomplete((document.getElementById('autocomplete')), {
+                types: ['geocode'],
+            });
+            autocomplete.addListener('place_changed', () => {
+                const place = autocomplete.getPlace();
+                console.log('place', place);
+                const coords = place.geometry.location
+                const lat = coords.lat()
+                const lng = coords.lng()
+                console.log('coords', coords);
+
+                map.flyTo({ center: [+lng, +lat], zoom: 20 });
+
+
+                //const query = `[out:json][timeout:25];(node["aeroway"="aerodrome"](${bounds});way["aeroway"="aerodrome"](${bounds});relation["aeroway"="aerodrome"](${bounds}););out;>;out skel qt;`
+                const query = `[out:json][timeout:25];( way["addr:housenumber"](around:30,${lat},${lng});); out body; >; out skel qt;`
+                fetch('https://overpass-api.de/api/interpreter', {
+                    method: "POST",
+                    body: query
+                })
+                    .then(response => response.json())
+                    .then(json => {
+                        console.log('json', json);
+                        const geometry = osmtogeojson(json)
+                        console.log('geometry', geometry);
+                        map.getSource("maine").setData(geometry)
+
+                        const marker1 = new mapboxgl.Marker()
+                            .setLngLat([+lng, +lat])
+                            .addTo(map);
+
+                        const contains = []
+                        const pt = turf.point([+lng, +lat]);
+                        geometry.features.forEach(g => {
+                            if (turf.booleanPointInPolygon(pt, g)) {
+                                contains.push(g)
+                            }
+                        })
+
+                        if (contains.length > 0) {
+                            infoDiv.innerHTML = `
+                            <div>Address: ${place.formatted_address}</div>
+                            <div>Area: ${turf.area(contains[0]).toFixed(2)} m<sup>2</sup></div>
+                            `
+                        }
+
+                    })
+                    .catch(e => {
+                        alert(e)
+                    })
+
+            });
+        }
+
+    </script>
+
+    <script
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAoyZ_yVsI5N8KhjbWRyQeme1Pfz2DRYYc&libraries=places&callback=initAutocomplete"
+        async defer></script>
+</body>
+
+</html>
