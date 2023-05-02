@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Add a polygon to a map using a GeoJSON source</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.12.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.12.0/mapbox-gl.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <script src="js/osmtogeojson.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        #autocomplete {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000
+        }
+
+        #info {
+            position: absolute;
+            top: 50px;
+            left: 20px;
+            z-index: 1000;
+            background-color: white;
+            padding: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="info"></div>
+    <input id="autocomplete" placeholder="45 Hugo Street, San Francisco" type="text"></input>
+
+    <div id="map"></div>
+
+    <script>
+        const infoDiv = document.getElementById("info")
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic3dlcnQiLCJhIjoiY2s3bHNtdjF2MDJ1eTNmcGowanU5MHR4ZiJ9.hzhWj9bhgD5itpWAPc3nNA';
+        const map = new mapboxgl.Map({
+            container: 'map', // container ID
+            // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
+            style: 'mapbox://styles/mapbox/streets-v12', // style URL
+            center: { lng: -81.39390340024698, lat: 43.20063021704081 }, // starting position
+            zoom: 11, // starting zoom
+            projection: "mercator"
+        });
+
+        map.on('load', () => {
+            // Add a data source containing GeoJSON data.
+            map.addSource('maine', {
+                'type': 'geojson',
+                'data': turf.featureCollection([])
+            });
+
+            // Add a black outline around the polygon.
+            map.addLayer({
+                'id': 'outline',
+                'type': 'line',
+                'source': 'maine',
+                'layout': {},
+                'paint': {
+                    'line-color': '#000',
+                    'line-width': 3
+                }
+            });
+
+
+            const query = `[out:json][timeout:25];way[highway][highway!=primary](poly:"43.2891576 -81.469594 43.1432882 -81.4417849 43.2036298 -81.2237749 43.2934058 -81.4307986 43.2891576 -81.469594"); out body; >; out skel qt;`
+            fetch('https://overpass-api.de/api/interpreter', {
+                method: "POST",
+                body: query
+            })
+                .then(response => response.json())
+                .then(json => {
+                    console.log('json', json);
+                    const geometry = osmtogeojson(json)
+                    console.log('geometry', geometry);
+                    map.getSource("maine").setData(geometry)
+
+
+                    const length = geometry.features.map(d => {
+                        return turf.length(d, { units: 'meters' });
+                    }).reduce((a, b) => a + b, 0)
+
+                    console.log('length', length);
+
+                })
+                .catch(e => {
+                    alert(e)
+                })
+
+        });
+
+
+
+    </script>
+
+
+</body>
+
+</html>
