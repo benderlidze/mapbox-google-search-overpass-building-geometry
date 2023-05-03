@@ -49,6 +49,9 @@
     <div id="map"></div>
 
     <script>
+
+        const border = { "type": "FeatureCollection", "features": [{ "type": "Feature", "geometry": { "type": "Polygon", "coordinates": [[[-81.469594, 43.2891576, 0], [-81.4417849, 43.1432882, 0], [-81.2237749, 43.2036298, 0], [-81.4307986, 43.2934058, 0], [-81.469594, 43.2891576, 0]]] }, "properties": {} }] }
+
         const infoDiv = document.getElementById("info")
         mapboxgl.accessToken = 'pk.eyJ1Ijoic3dlcnQiLCJhIjoiY2s3bHNtdjF2MDJ1eTNmcGowanU5MHR4ZiJ9.hzhWj9bhgD5itpWAPc3nNA';
         const map = new mapboxgl.Map({
@@ -75,12 +78,28 @@
                 'layout': {},
                 'paint': {
                     'line-color': '#000',
-                    'line-width': 3
+                    'line-width': 6
                 }
             });
 
+            map.addSource('fix', {
+                'type': 'geojson',
+                'data': 'g.geojson'
+            });
 
-            const query = `[out:json][timeout:25];way[highway][highway!=primary](poly:"43.2891576 -81.469594 43.1432882 -81.4417849 43.2036298 -81.2237749 43.2934058 -81.4307986 43.2891576 -81.469594"); out body; >; out skel qt;`
+            // Add a black outline around the polygon.
+            map.addLayer({
+                'id': 'fixoutline',
+                'type': 'line',
+                'source': 'fix',
+                'layout': {},
+                'paint': {
+                    'line-color': 'white',
+                    'line-width': 2
+                }
+            });
+
+            const query = `[out:json][timeout:25];way[highway][highway!=residential][highway!=service][highway!=primary][highway!=track][highway!=footway][highway!=path][highway!=construction](poly:"43.2891576 -81.469594 43.1432882 -81.4417849 43.2036298 -81.2237749 43.2934058 -81.4307986 43.2891576 -81.469594"); out body; >; out skel qt;`
             fetch('https://overpass-api.de/api/interpreter', {
                 method: "POST",
                 body: query
@@ -92,13 +111,26 @@
                     console.log('geometry', geometry);
                     map.getSource("maine").setData(geometry)
 
-
                     const length = geometry.features.map(d => {
                         return turf.length(d, { units: 'meters' });
                     }).reduce((a, b) => a + b, 0)
-
                     console.log('length', length);
+                })
+                .catch(e => {
+                    alert(e)
+                })
 
+
+            fetch('g.geojson')
+                .then(response => response.json())
+                .then(json => {
+                    console.log('json', json);
+                    map.getSource("fix").setData(json)
+
+                    const length = json.features.map(d => {
+                        return turf.length(d, { units: 'meters' });
+                    }).reduce((a, b) => a + b, 0)
+                    console.log('length fix', length);
                 })
                 .catch(e => {
                     alert(e)
