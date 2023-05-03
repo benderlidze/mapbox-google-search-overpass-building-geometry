@@ -115,6 +115,7 @@
                         return turf.length(d, { units: 'meters' });
                     }).reduce((a, b) => a + b, 0)
                     console.log('length', length);
+                    infoDiv.innerHTML += `<div>Black: ${length.toFixed(2)} meters</div>`
                 })
                 .catch(e => {
                     alert(e)
@@ -131,6 +132,7 @@
                         return turf.length(d, { units: 'meters' });
                     }).reduce((a, b) => a + b, 0)
                     console.log('length fix', length);
+                    infoDiv.innerHTML += `<div>White: ${length.toFixed(2)} meters</div>`
                 })
                 .catch(e => {
                     alert(e)
